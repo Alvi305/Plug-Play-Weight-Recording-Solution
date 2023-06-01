@@ -5,8 +5,10 @@
 #define TX_PIN 17
 
 // Buffer size
-static constexpr int bufferSize = 12;
+static constexpr int bufferSize = 11;
 unsigned char readBuffer[bufferSize];
+
+bool stopChar = false;
 
 // HardwareSerial object
 HardwareSerial MySerial(2);
@@ -14,39 +16,40 @@ HardwareSerial MySerial(2);
 void setup() {
   // Initialize the built-in serial connection for debugging
   Serial.begin(115200);
-
   // Initialize the connection to the Magic Weight Indicator
   MySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+
+// for bootloader log messages
+  Serial.println();
+  Serial.println("-----------Sketch started-----");
+  Serial.flush();
 }
 
-void readDataFromDevice() {
+void ReadDataFromDevice() {
   if (MySerial.available()) {
-    delay(1);
+    delay(10);
     for (int i = 0; i < bufferSize; i++) {
+      delay(3);
       readBuffer[i] = MySerial.read();
+      //MySerial.flush();
+     // Serial.println((char)readBuffer[i]); // debugging
     }
   }
 }
 
-void printBufferValues() {
+void PrintBufferValues() {
   for (int i = 0; i < bufferSize; i++) {
     Serial.print((char)readBuffer[i]);
   }
   Serial.println();
+  Serial.flush();
+  delay(1000);
 }
 
 void loop() {
-  Serial.println("Read started");
 
-  // Read data from the Magic Weight Indicator
-  readDataFromDevice();
+  
+ReadDataFromDevice();
 
-  Serial.println("Read Finished");
-  Serial.flush();
-
-  // Print the buffer values
-  printBufferValues();
-
-  Serial.flush();
-  delay(500);
+PrintBufferValues();
 }
