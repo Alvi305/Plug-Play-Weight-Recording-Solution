@@ -5,8 +5,12 @@
 #define TX_PIN 17
 
 // Buffer size
-static constexpr int bufferSize = 11;
-unsigned char readBuffer[bufferSize];
+static constexpr int payloadSize = 7;
+char payload[bufferSize];
+
+// Values to be check against
+
+byte targetValues[] = {32,48,49,50,51,52,53,54,55,56,57}
 
 bool stopChar = false;
 
@@ -15,7 +19,7 @@ HardwareSerial MySerial(2);
 
 void setup() {
   // Initialize the built-in serial connection for debugging
-  Serial.begin(115200);
+  
   // Initialize the connection to the Magic Weight Indicator
   MySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
@@ -23,33 +27,41 @@ void setup() {
   Serial.println();
   Serial.println("-----------Sketch started-----");
   Serial.flush();
-}
 
 void ReadDataFromDevice() {
+ 
+
   if (MySerial.available()) {
-    delay(10);
-    for (int i = 0; i < bufferSize; i++) {
+    delay(2);
+
+   if (MySerial.read() == (byte) 22)
+   {
+      int i = 0;
+   
+      for ( i = 0; i < payLoad
+   }
+
+
+
+
+
+
+
+
+    
+    for (int i = 0; i < payLoadSize; i++) {
       delay(3);
-      readBuffer[i] = MySerial.read();
+      payLoadBuffer[i] = MySerial.read();
       //MySerial.flush();
      // Serial.println((char)readBuffer[i]); // debugging
     }
   }
 }
 
-void PrintBufferValues() {
-  for (int i = 0; i < bufferSize; i++) {
-    Serial.print((char)readBuffer[i]);
-  }
-  Serial.println();
-  Serial.flush();
-  delay(1000);
-}
-
-void loop() {
 
   
-ReadDataFromDevice();
 
-PrintBufferValues();
+void loop() {
+  // put your main code here, to run repeatedly:
+
 }
