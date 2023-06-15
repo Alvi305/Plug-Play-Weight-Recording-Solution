@@ -124,10 +124,9 @@ void sendPayload( int state) {
 JsonObject payloadData(StaticJsonDocument<200>& jsonDoc, char* id, char jsonarray[]) {
   JsonObject jsonObj = jsonDoc.to<JsonObject>();
 
-  String weight(jsonarray);
-//  weight.remove(weight.length() - 1); // Remove the last character
+ 
   jsonObj["id"] = id;
-  jsonObj["weight"] = weight;
+  jsonObj["weight"] = jsonarray;
 
   return jsonObj;
 }
