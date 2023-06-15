@@ -26,15 +26,15 @@ byte targetValues[] = {32, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57};
 //char targetValues[] = {32,'.','1','2','3','4','5','6','7','8','9','0'};
 
 
-// variable for storing the pushbutton status
-int buttonState = 0;
-
 // HardwareSerial object
 HardwareSerial MySerial(2);
 
 
 // index for the payload array
 int i = 0;
+
+
+volatile bool buttonPressed = false;
 
 void setup() {
   // Initialize the built-in serial connection for debugging
@@ -44,10 +44,12 @@ void setup() {
   MySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
 
+  
   // initialize the pushbutton pin as an input
-  pinMode(BUTTON_PIN, INPUT);
-  // initialize the LED pin as an output
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Attach interrupt to button pin, call handleButtonPress on falling edge
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, FALLING);
 
   // set the seed for generating random uuid
   uint32_t seed1 = random(999999999);
@@ -116,15 +118,27 @@ void PrintValues() {
 
 }
 
-void sendPayload( int state) {
-  // CALL FUNCTION HERE TO SEND PAYLOAD TO WEBSERVER
-  
+
+void handleButtonPress() {
+  buttonPressed = true;
+}
+
+
+
+
+void sendPayload(bool state) {
+  if (state) {
+    // turn LED on
+    Serial.println("High state");
+    
+    // CALL FUNCTION HERE TO SEND PAYLOAD TO WEBSERVER
+  }
+ 
 }
 
 JsonObject payloadData(StaticJsonDocument<200>& jsonDoc, char* id, char jsonarray[]) {
   JsonObject jsonObj = jsonDoc.to<JsonObject>();
 
- 
   jsonObj["id"] = id;
   jsonObj["weight"] = jsonarray;
 
@@ -155,30 +169,18 @@ void loop() {
     serializeJsonPretty(obj, Serial);
     Serial.println();
     
+    Serial.println(jsonDoc.memoryUsage());
+    jsonDoc.clear();
+    Serial.println(jsonDoc.memoryUsage());
     MySerial.flush();
    // objPtr = &obj;
   }
 
 
-// READ BUTTON PRESS
-  buttonState = digitalRead(BUTTON_PIN);
-  //Serial.println(buttonState);
-
-
 // TURN LED ON IF BUTTON IS PRESSED
-  if (buttonState == 1) { 
-    /Serial.println("DATA SENT");    
-  // CALL FUNCTION HERE TO SEND PAYLOAD TO WEBSERVER 
+   if (buttonPressed) {
+    Serial.println("Data Sent");
+    buttonPressed = false;
   }
   
-  else {
-  // turn LED off
-  digitalWrite(LED_PIN, LOW);
-  
-  //    sendPayload(buttonState);
-  //    if (objPtr) {
-  //      serializeJsonPretty(*objPtr, Serial);
-  //      Serial.println();
-  //    }
-  }
 }
