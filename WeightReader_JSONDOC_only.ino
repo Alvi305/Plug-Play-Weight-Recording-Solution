@@ -2,7 +2,10 @@
 #include <ArduinoJson.h>
 #include <UUID.h>
 #include <Arduino.h>
+#include <WiFi.h>
+#include <WebServer.h>
 
+// ============================================================= Variables and object(s)====================================================================================================
 
 UUID uuid;
 
@@ -33,39 +36,49 @@ int buttonState = 0;
 HardwareSerial MySerial(2);
 
 
+// for sending data to web server
+char buffer[100];
+
+
 // index for the payload array
 int i = 0;
 
-
 volatile bool buttonPressed = false;
 
-void setup() {
-  // Initialize the built-in serial connection for debugging
-  Serial.begin(115200);
 
-  // Initialize the connection to the Magic Weight Indicator
-  MySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+//  variables used for connecting to the WiFi
+const char* ssid = "Aerovision"; 
+const char* password =  "W1F1@Aer0visi0n"; 
+ 
+IPAddress staticIP(192, 168, 51, 216);
+IPAddress gateway(192, 168, 51, 1);   // Replace this with your gateway IP Addess
+IPAddress subnet(255, 255, 0, 0);  // Replace this with your Subnet Mask
+IPAddress dns(192, 168, 51, 1);   // Replace this with your DNS
+
+// Global variable to store the JSON object
+StaticJsonDocument<50> jsonDoc;
+
+WebServer server(80);
 
 
- // initialize the pushbutton pin as an input
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  // Attach interrupt to button pin, call handleButtonPress on falling edge
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, FALLING);
 
-  // set the seed for generating random uuid
-  uint32_t seed1 = random(999999999);
-  uint32_t seed2 = random(999999999);
 
-  uuid.seed(seed1, seed2);
 
-  MySerial.setRxBufferSize(16);
-  // For bootloader log messages
-  Serial.println();
-  Serial.println("-----------Sketch started-----");
-  Serial.flush();
+
+
+
+
+
+
+
+// ================================================ FUNCTIONS =====================================================================================================================
+void handleButtonPress() {
+  buttonPressed = true;
 }
 
+
+// for parsing data stream received from weight indicator
 bool FindValueinTarget(char target, byte targetArray[], int arrSize) {
   for (int j = 0; j < arrSize; ++j) {
     if (targetArray[j] == target) 
@@ -111,7 +124,7 @@ void ReadDataFromDevice() {
         }
       }
     }
-    MySerial.flush();
+//    MySerial.flush();
   }
 }
 
@@ -121,10 +134,8 @@ void PrintValues() {
 
 }
 
-void sendPayload( int state) {
-  // CALL FUNCTION HERE TO SEND PAYLOAD TO WEBSERVER
-  
-}
+
+
 //
 //JsonObject payloadData(StaticJsonDocument<200>& jsonDoc, char* id, char jsonarray[]) {
 //  
@@ -138,17 +149,14 @@ void sendPayload( int state) {
 //  return jsonObj;
 //}
 
-char* generateUUID() {
-  // Generate a new UUID
-  uuid.generate();
+//char* generateUUID() {
+//  // Generate a new UUID
+//  uuid.generate();
+//
+//  return uuid.toCharArray();
+//}
 
-  return uuid.toCharArray();
-}
 
-
-void handleButtonPress() {
-  buttonPressed = true;
-}
 
 
 void sendPayload(bool state) {
@@ -162,42 +170,135 @@ void sendPayload(bool state) {
 }
 
 
+// To connect to wifi
+void initWifi() {
+  
+ if (WiFi.config(staticIP, gateway, subnet, dns, dns) == false) {
+   Serial.println("Configuration failed.");
+ }
+   
+ WiFi.begin(ssid, password);
+ 
+ while (WiFi.status() != WL_CONNECTED) {
+   delay(500);
+   Serial.print("Connecting...\n\n");
+ }
+ 
+ Serial.print("Connected. Local IP: ");
+ Serial.println(WiFi.localIP());
+}
+
+void sendWeight() {
+  Serial.println("Send Weight");
+  create_json(payload);
+  server.send(200,"application/json",buffer);
+}
+
+
+void setup_routing() {
+  server.on("/weight",sendWeight);
+  server.begin();
+}
+
+void create_json(char* weight) {
+  jsonDoc.clear();
+  jsonDoc["weight"] = weight;
+  serializeJson(jsonDoc,buffer);
+}
 
 
 
-// Global variable to store the JSON object
-StaticJsonDocument<50> jsonDoc;
+
+// =======================================================================================================Setup and Loop Functions============================================================================================================
+
+void setup() {
+  // Initialize the built-in serial connection for debugging
+  Serial.begin(115200);
+
+  // Initialize the connection to the Magic Weight Indicator
+  MySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+
+
+ // initialize the pushbutton pin as an input
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Attach interrupt to button pin, call handleButtonPress on falling edge
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, RISING);
+//
+//  // set the seed for generating random uuid
+//  uint32_t seed1 = random(999999999);
+//  uint32_t seed2 = random(999999999);
+//
+//  uuid.seed(seed1, seed2);
+
+// prevent same readings from filling the RX buffer
+  MySerial.setRxBufferSize(16);
+
+  initWifi();
+
+
+  
+  // For bootloader log messages
+  Serial.println();
+  Serial.println("-----------Sketch started-----");
+  Serial.flush();
+
+ setup_routing();
+}
+
+
+
+
 
 void loop() {
   // Put your main code here, to run repeatedly:
   
 ReadDataFromDevice();
-// char* id = generateUUID();
 
-//  JsonObject* objPtr = nullptr;
 
-  
+
 
   if (i == bufferSize) {
-//    jsonDoc["id"] = id;
-
-    // load data into jsondoc 
-    jsonDoc["weight"] = payload;
-    serializeJsonPretty(jsonDoc, Serial);
-    Serial.println();
-    Serial.flush();
-    Serial.println(jsonDoc.memoryUsage());
-    jsonDoc.clear();
-    Serial.println(jsonDoc.memoryUsage());
+    server.handleClient();
     
-   // objPtr = &obj;
-  }
+    
+//    jsonDoc.clear();
+//    jsonDoc["weight"] = payload;
+//    
+//    
+//    Serial.println(sendBuffer);    
+
+   
+
+
+
+// =========DEBUGGING=====================    
+//    serializeJsonPretty(jsonDoc, Serial);
+//    Serial.println();
+//    
+//    Serial.println(jsonDoc.memoryUsage());
+//    jsonDoc.clear();
+//    Serial.println(jsonDoc.memoryUsage());
+
+    // to get size of SRAM and stack left
+//     char mem[128]; // Declare the 'temp' variable for holding the formatted string
+//    sprintf(mem, "Heap: Free:%i, Min:%i, Size:%i, Alloc:%i", ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap());
+//    Serial.println(mem); // Print the heap information
+//     
+}
+
 
 
    if (buttonPressed) {
-    Serial.println("Data Sent");
-    buttonPressed = false;
+      buttonPressed = false;
+     
+      
+    
+    
+    
+      delay(200);
   }
+   
   
 
 }
