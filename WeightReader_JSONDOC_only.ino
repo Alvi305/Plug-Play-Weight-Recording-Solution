@@ -1,22 +1,20 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
 #include <HardwareSerial.h>
 #include <ArduinoJson.h>
-#include <UUID.h>
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WebServer.h>
+
 
 // ============================================================= Variables and object(s)====================================================================================================
-
-UUID uuid;
 
 // Set UART Pins
 #define RX_PIN 16
 #define TX_PIN 17
 
 
+
 // Set LED & Button Pins
-#define BUTTON_PIN 5
-#define LED_PIN 4
+#define BUTTON_PIN 15
 
 
 // Buffer size
@@ -35,16 +33,10 @@ int buttonState = 0;
 // HardwareSerial object
 HardwareSerial MySerial(2);
 
-
-// for sending data to web server
-char buffer[100];
-
-
 // index for the payload array
 int i = 0;
 
 volatile bool buttonPressed = false;
-
 
 //  variables used for connecting to the WiFi
 const char* ssid = "Aerovision"; 
@@ -55,25 +47,71 @@ IPAddress gateway(192, 168, 51, 1);   // Replace this with your gateway IP Addes
 IPAddress subnet(255, 255, 0, 0);  // Replace this with your Subnet Mask
 IPAddress dns(192, 168, 51, 1);   // Replace this with your DNS
 
-// Global variable to store the JSON object
-StaticJsonDocument<50> jsonDoc;
-
-WebServer server(80);
-
-
-
-
-
-
-
-
-
-
 
 
 
 // ================================================ FUNCTIONS =====================================================================================================================
-void handleButtonPress() {
+
+
+// To connect to wifi
+void initWifi() {
+  
+ if (WiFi.config(staticIP, gateway, subnet, dns, dns) == false) {
+   Serial.println("Configuration failed.");
+ }
+   
+ WiFi.begin(ssid, password);
+ 
+ while (WiFi.status() != WL_CONNECTED) {
+   delay(500);
+   Serial.print("Connecting...\n\n");
+ }
+ 
+ Serial.print("Connected. Local IP: ");
+ Serial.println(WiFi.localIP());
+}
+
+void sendData(StaticJsonDocument<100>& Doc) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    // Specify the target Crow API endpoint
+    http.begin("http://192.168.51.11:18081/crow-app/weight"); 
+    http.addHeader("Content-Type", "application/json");
+
+    // Create JSON data to send
+    String jsonData;
+    serializeJson(Doc, jsonData);
+
+    // Send the POST request and get the response code
+    int httpResponseCode = http.POST(jsonData);
+
+    // Check the response code
+    if (httpResponseCode > 0) {
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+      String payload = http.getString();
+      Serial.println(payload);
+    } else {
+      Serial.print("Error code: ");
+      Serial.println(httpResponseCode);
+      Serial.print("Error message: ");
+      Serial.println(http.errorToString(httpResponseCode)); // Add this line to print the error message
+    }
+
+    // Close the connection
+    http.end();
+  } else {
+    Serial.println("Error in WiFi connection");
+  }
+}
+
+
+
+
+
+
+void IRAM_ATTR handleButtonPress() {
   buttonPressed = true;
 }
 
@@ -136,79 +174,11 @@ void PrintValues() {
 
 
 
-//
-//JsonObject payloadData(StaticJsonDocument<200>& jsonDoc, char* id, char jsonarray[]) {
-//  
-//  JsonObject jsonObj = jsonDoc.to<JsonObject>();
-//
-//  
-////  weight.remove(weight.length() - 1); // Remove the last character
-//  jsonObj["id"] = id;
-//  jsonObj["weight"] = jsonarray;
-//
-//  return jsonObj;
-//}
-
-//char* generateUUID() {
-//  // Generate a new UUID
-//  uuid.generate();
-//
-//  return uuid.toCharArray();
-//}
 
 
 
-
-void sendPayload(bool state) {
-  if (state) {
-    // turn LED on
-    Serial.println("High state");
-    
-    // CALL FUNCTION HERE TO SEND PAYLOAD TO WEBSERVER
-  }
- 
-}
-
-
-// To connect to wifi
-void initWifi() {
-  
- if (WiFi.config(staticIP, gateway, subnet, dns, dns) == false) {
-   Serial.println("Configuration failed.");
- }
-   
- WiFi.begin(ssid, password);
- 
- while (WiFi.status() != WL_CONNECTED) {
-   delay(500);
-   Serial.print("Connecting...\n\n");
- }
- 
- Serial.print("Connected. Local IP: ");
- Serial.println(WiFi.localIP());
-}
-
-void sendWeight() {
-  Serial.println("Send Weight");
-  create_json(payload);
-  server.send(200,"application/json",buffer);
-}
-
-
-void setup_routing() {
-  server.on("/weight",sendWeight);
-  server.begin();
-}
-
-void create_json(char* weight) {
-  jsonDoc.clear();
-  jsonDoc["weight"] = weight;
-  serializeJson(jsonDoc,buffer);
-}
-
-
-
-
+// Global variable to store the JSON object
+StaticJsonDocument<100> jsonDoc;
 // =======================================================================================================Setup and Loop Functions============================================================================================================
 
 void setup() {
@@ -224,12 +194,6 @@ void setup() {
 
   // Attach interrupt to button pin, call handleButtonPress on falling edge
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, RISING);
-//
-//  // set the seed for generating random uuid
-//  uint32_t seed1 = random(999999999);
-//  uint32_t seed2 = random(999999999);
-//
-//  uuid.seed(seed1, seed2);
 
 // prevent same readings from filling the RX buffer
   MySerial.setRxBufferSize(16);
@@ -242,8 +206,6 @@ void setup() {
   Serial.println();
   Serial.println("-----------Sketch started-----");
   Serial.flush();
-
- setup_routing();
 }
 
 
@@ -257,47 +219,25 @@ ReadDataFromDevice();
 
 
 
-
-  if (i == bufferSize) {
-    server.handleClient();
+// get weight data
+  if (i == bufferSize) 
+  {
+     double weightValue = atof(payload); // Convert the payload to a double value
+    jsonDoc["weight"] = weightValue; // Update the JSON object with the double value
     
-    
-//    jsonDoc.clear();
-//    jsonDoc["weight"] = payload;
-//    
-//    
-//    Serial.println(sendBuffer);    
-
-   
-
-
-
-// =========DEBUGGING=====================    
-//    serializeJsonPretty(jsonDoc, Serial);
-//    Serial.println();
-//    
-//    Serial.println(jsonDoc.memoryUsage());
-//    jsonDoc.clear();
-//    Serial.println(jsonDoc.memoryUsage());
-
-    // to get size of SRAM and stack left
-//     char mem[128]; // Declare the 'temp' variable for holding the formatted string
-//    sprintf(mem, "Heap: Free:%i, Min:%i, Size:%i, Alloc:%i", ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap());
-//    Serial.println(mem); // Print the heap information
-//     
-}
-
-
-
-   if (buttonPressed) {
-      buttonPressed = false;
-     
-      
-    
-    
-    
-      delay(200);
   }
+
+
+// send weight and barcode data
+  if (buttonPressed) {
+        sendData(jsonDoc); // Pass jsonDoc as an argument
+        buttonPressed = false;
+    }
+
+
+
+ 
+  
    
   
 
