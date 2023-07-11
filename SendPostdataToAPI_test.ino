@@ -10,8 +10,7 @@
 
 
 // Set LED & Button Pins
-#define BUTTON_PIN 5
-#define LED_PIN 4
+#define BUTTON_PIN 15
 
 
 // Buffer size
@@ -80,12 +79,12 @@ void sendData() {
     HTTPClient http;
 
     // Specify the target Crow API endpoint
-    http.begin("http://192.168.51.10:18081/crow-app/weight"); 
+    http.begin("http://192.168.51.11:18081/crow-app/weight"); 
     http.addHeader("Content-Type", "application/json");
 
     // Create JSON data to send
     jsonDoc;
-    jsonDoc["weight"] = 12;
+    jsonDoc["weight"] = 26.0;
     String jsonData;
     serializeJson(jsonDoc, jsonData);
 
@@ -113,6 +112,20 @@ void sendData() {
 }
 
 
+void IRAM_ATTR handleButtonPress() {
+  buttonPressed = true;
+}
+
+void sendPayload(bool state) {
+  if (state) {
+    // turn LED on
+    Serial.println("High state");
+    
+    // CALL FUNCTION HERE TO SEND PAYLOAD TO WEBSERVER
+  }
+ 
+}
+
 
 
 
@@ -125,21 +138,18 @@ void setup() {
     // Initialize the built-in serial connection for debugging
   Serial.begin(115200);
 
+
 //  // Initialize the connection to the Magic Weight Indicator
 //  MySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 //
 //
 // // initialize the pushbutton pin as an input
-//  pinMode(BUTTON_PIN, INPUT_PULLUP);
-//
-//  // Attach interrupt to button pin, call handleButtonPress on falling edge
-//  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, RISING);
-//
-//  // set the seed for generating random uuid
-//  uint32_t seed1 = random(999999999);
-//  uint32_t seed2 = random(999999999);
-//
-//  uuid.seed(seed1, seed2);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Attach interrupt to button pin, call handleButtonPress on falling edge
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, RISING);
+
+
 
 // prevent same readings from filling the RX buffer
   MySerial.setRxBufferSize(16);
@@ -157,6 +167,9 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-sendData();
-delay(5000);
+  if (buttonPressed) {
+   
+    sendData();
+    buttonPressed = false;
+  }
 }
