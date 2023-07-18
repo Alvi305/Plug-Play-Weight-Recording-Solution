@@ -19,13 +19,21 @@ void setup() {
   lcd.begin(35, 36);
 
   lcd.setCursor(0,0);
-  lcd.print("System Loading....");
-  delay(2000);
+  lcd.print("System Loading...");
+
+  // Display progress bar
+  lcd.setCursor(0, 1);
+  for (int i = 0; i < 16; i++) {
+    lcd.write(0xFF); // Print a solid block
+    delay(125); // Adjust this value to control the speed of the progress bar
+    lcd.setCursor(i + 1, 1);
+  }
+
+  delay(500);
   lcd.clear();
   lcd.print("ID:");
   lcd.setCursor(0,1);
   lcd.print("W:");
-  
 }
 
 void loop() {
@@ -53,7 +61,8 @@ void loop() {
       int shiftDelay = 300; // Adjust this value to control the speed of the sliding animation
 
       if (textLength > 16) {
-        for (int i = 0; i <= textLength - 16; ++i) {
+        // length is 14 as id: occupies first
+        for (int i = 0; i <= textLength-14; ++i) {
           lcd.setCursor(0, 0);
           lcd.print("ID:");
           lcd.print(scannerBuffer + i);
@@ -62,10 +71,15 @@ void loop() {
           delay(shiftDelay);
         }
       } else {
-        lcd.print("ID:");
-        lcd.print(scannerBuffer);
-        lcd.setCursor(0, 1);
-        lcd.print("W:12.54 kg");
+          lcd.setCursor(0, 0);
+          lcd.print("ID:");
+          
+          // Create a new string without the last character
+          scannerBuffer[textLength-1] = '\0';
+          lcd.print(scannerBuffer);
+          
+          lcd.setCursor(0, 1);
+          lcd.print("W:12.54 kg");
       }
 
       // Clear the scannerBuffer array
