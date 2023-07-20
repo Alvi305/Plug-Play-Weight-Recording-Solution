@@ -18,7 +18,7 @@
 #define TX_PIN_2 14 // Change this to the desired TX pin number
 
 
-// HardwareSerial object
+// HardwareSerial object for UART
 HardwareSerial BarcodeScannerSerial(1); // Use UART1 for barcode scanner
 HardwareSerial WeightReaderSerial(2);
 
@@ -34,7 +34,7 @@ char payload[bufferSize];
 static constexpr int scannerbufferSize = 256;
 char scannerBuffer[scannerbufferSize];
 
-// Values to be checked against
+// Values to be checked against for gettting data from Weight Indicator
 static constexpr int targetSize = 12;
 byte targetValues[] = {32, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57};
 //char targetValues[] = {32,'.','1','2','3','4','5','6','7','8','9','0'};
@@ -47,7 +47,7 @@ int buttonState = 0;
 // Set the LCD address to 0x27 for a 16 chars and 2 line display
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// index for the payload array
+// index for the payload array; will be set to 0 if garbage data is read
 int i = 0;
 
 volatile bool buttonPressed = false;
@@ -85,27 +85,41 @@ void initWifi() {
  Serial.println(WiFi.localIP());
 }
 
+// Sends data from the MCU to the backend
+
 void sendData(StaticJsonDocument<250>& Doc) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
 
     // Specify the target Crow API endpoint
-    http.begin("http://192.168.51.11:18081/crow-app/weight"); 
+    http.begin("http://192.168.51.11:8080/crow-app/weight"); 
     http.addHeader("Content-Type", "application/json");
+
+    //DEBUG MESSAGE
+    Serial.println("API specified");
 
     // Create JSON data to send
     String jsonData;
     serializeJson(Doc, jsonData);
 
+    //DEBUG MESSAGE
+    Serial.println("JSON data created");
+
+
     // Send the POST request and get the response code
     int httpResponseCode = http.POST(jsonData);
+
+    //DEBUG MESSAGE
+    Serial.println("Request sent");
+
+    delay(500);
 
     // Check the response code
     if (httpResponseCode > 0) {
       Serial.print("HTTP Response code: ");
       Serial.println(httpResponseCode);
       String payload = http.getString();
-      Serial.println(payload);
+//      Serial.println(payload);
     } else {
       Serial.print("Error code: ");
       Serial.println(httpResponseCode);
@@ -120,6 +134,8 @@ void sendData(StaticJsonDocument<250>& Doc) {
   }
 }
 
+
+// displays barcode and weight value on the LCD display
 void LDC_DISPLAY(int scannerSerialCharLength ) {
   if (scannerSerialCharLength) {
   
@@ -143,13 +159,13 @@ void LDC_DISPLAY(int scannerSerialCharLength ) {
       int shiftDelay = 300; // Adjust this value to control the speed of the sliding animation
 
       if (textLength > 16) {
-        // length is 14 as id: occupies first
+        // length is 14 as id: occupies first two entries and null occupies last
         for (int i = 0; i <= textLength-14; ++i) {
           lcd.setCursor(0, 0);
           lcd.print("ID:");
           lcd.print(scannerBuffer + i);
           lcd.setCursor(0, 1);
-          lcd.print("W:12.54 kg");
+          lcd.print("W:12.78 kg");
           delay(shiftDelay);
         }
       } else {  
@@ -161,11 +177,11 @@ void LDC_DISPLAY(int scannerSerialCharLength ) {
           lcd.print(scannerBuffer);
           
           lcd.setCursor(0, 1);
-          lcd.print("W:12.54 kg");
+          lcd.print("W:12.78 kg");
       }
 
-      // Clear the scannerBuffer array
-      scannerBuffer[0] = '\0';
+//      // Clear the scannerBuffer array for new values
+//      scannerBuffer[0] = '\0';
     }
   }
 }
@@ -173,7 +189,7 @@ void LDC_DISPLAY(int scannerSerialCharLength ) {
 
 
 
-
+// ISR for button press
 void IRAM_ATTR handleButtonPress() {
   buttonPressed = true;
 }
@@ -192,6 +208,7 @@ bool FindValueinTarget(char target, byte targetArray[], int arrSize) {
 
 }
 
+// getting weight data from weight indicator
 void ReadDataFromDevice() {
   if (WeightReaderSerial.available()) 
  {
@@ -200,6 +217,7 @@ void ReadDataFromDevice() {
     if (WeightReaderSerial.read() == (byte)22) 
     {
       // Add data from Weight Indicator to the created buffer array
+      
       //Serial.println("22 found. Filling payload"); // DEBUG MESSAGE
 
       for (i = 0; i < bufferSize; ++i) {
@@ -219,6 +237,7 @@ void ReadDataFromDevice() {
         } 
         else 
         { // If value does not match, then sequence is ruined. Start refilling buffer again
+          
          // Serial.println("Value does not match. Abort filling payload array"); // DEBUG MESSAGE
           //Serial.println(temp);
           break;
@@ -229,6 +248,7 @@ void ReadDataFromDevice() {
   }
 }
 
+// to print weight value
 void PrintValues() {
 
  Serial.print(payload);
@@ -245,39 +265,39 @@ StaticJsonDocument<250> jsonDoc;
 // =======================================================================================================Setup and Loop Functions============================================================================================================
 
 void setup() {
-  // Initialize the built-in serial connection for debugging
-  Serial.begin(115200);
+// Initialize the built-in serial connection for debugging
+Serial.begin(115200);
 
-  // Initialize the connection to the Magic Weight Indicator
-  WeightReaderSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+// Initialize the connection to the Magic Weight Indicator
+WeightReaderSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
-  // Initialize Barcode Scanner
-  BarcodeScannerSerial.begin(115200, SERIAL_8N1, RX_PIN_2, TX_PIN_2);
+// Initialize Barcode Scanner
+BarcodeScannerSerial.begin(115200, SERIAL_8N1, RX_PIN_2, TX_PIN_2);
 
 
 
- // initialize the pushbutton pin as an input
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+// initialize the pushbutton pin as an input
+pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  // Attach interrupt to button pin, call handleButtonPress on falling edge
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, RISING);
+// Attach interrupt to button pin, call handleButtonPress on falling edge
+attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, RISING);
 
 // prevent same readings from filling the RX buffer
-  WeightReaderSerial.setRxBufferSize(16);
+WeightReaderSerial.setRxBufferSize(16);
 
-  initWifi();
-
-
-  
-  // For bootloader log messages
-  Serial.println();
-  Serial.println("-----------Sketch started-----");
-  Serial.flush();
+initWifi();
 
 
   
-  //Initialize the LCD
-   //Initialize the LCD
+// For bootloader log messages
+Serial.println();
+Serial.println("-----------Sketch started-----");
+Serial.flush();
+
+
+  
+//Initialize the LCD
+ //Initialize the LCD
   lcd.begin(35, 36);
 
   lcd.setCursor(0,0);
@@ -316,16 +336,21 @@ LDC_DISPLAY(barcodeScannerLength);
 // get weight data
   if (i == bufferSize) 
   {
-     double weightValue = atof(payload); // Convert the payload to a double value
-    jsonDoc["weight"] = weightValue; // Update the JSON object with the double value
-    jsonDoc["barcode"] = scannerBuffer;
+//     double weightValue = atof(payload); // Convert the payload to a double value
+//    jsonDoc["weight"] = 12.78; // Update the JSON object with the double value
+//    jsonDoc["barcode"] = scannerBuffer;
     
   }
+
+jsonDoc["weight"] = 12.78; // Update the JSON object with the double value
+jsonDoc["barcode"] = scannerBuffer;
+  
 
 
 // send weight and barcode data
   if (buttonPressed) {
-        serializeJsonPretty(jsonDoc, Serial);
+        
+         serializeJsonPretty(jsonDoc, Serial);
         sendData(jsonDoc); // Pass jsonDoc as an argument
         buttonPressed = false;
     }
